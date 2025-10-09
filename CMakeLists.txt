@@ -12,3 +12,4 @@ add_executable(test-ascii
 target_include_directories(test-ascii PRIVATE
     ascii-view/include
 )
+target_compile_definitions(test-ascii PRIVATE M_PI=3.14159265358979323846)
