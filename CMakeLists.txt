@@ -8,6 +8,12 @@ add_executable(test-ascii
     ascii-view/src/image.c
     ascii-view/src/print_image.c
 )
+if (MSVC)
+    set_source_files_properties(
+        ascii-view/src/image.c
+        PROPERTIES COMPILE_FLAGS "/wd4068"
+    )
+endif()
 
 target_include_directories(test-ascii PRIVATE
     ascii-view/include
