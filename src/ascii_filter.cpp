@@ -8,23 +8,26 @@ extern "C" {
 #include <vector>
 #include <cstdlib> // for malloc/free
 
+#define DEFAULT_MAX_WIDTH 64
+#define DEFAULT_MAX_HEIGHT 48
+#define DEFAULT_CHARACTER_RATIO 2.0
+#define DEFAULT_EDGE_THRESHOLD 4.0
+
 void test_function() {
+    
+    std::cout << "[INFO] Loading Puffin image..." << std::endl;
+    image_t puffin_test = load_image("ascii-view/examples/puffin.jpg");
+    std::cout << "[INFO] Resizing image!" << std::endl;
+    image_t puffin_resized = make_resized(&puffin_test, DEFAULT_MAX_WIDTH, DEFAULT_MAX_HEIGHT, DEFAULT_CHARACTER_RATIO);
     std::cout << "[INFO] Calling print_image() from C code..." << std::endl;
 
-    image_t dummy_image;
-    dummy_image.width = 2;
-    dummy_image.height = 1;
-    dummy_image.channels = 3; // RGB
-    dummy_image.data = (double*)malloc(sizeof(double) * dummy_image.width * dummy_image.height * dummy_image.channels);
 
-    // Fill with zeros (black)
-    for (size_t i = 0; i < dummy_image.width * dummy_image.height * dummy_image.channels; i++) {
-        dummy_image.data[i] = 0.0;
-    }
 
     // Call print_image
-    print_image(&dummy_image, 0.5);
-    std::cout << "[INFO] Successfully called C function" << std::endl;
+    print_image(&puffin_resized, 0.5);
+    std::cout << "[INFO] Successfully called C function print_image()" << std::endl;
     // Clean up
-    free(dummy_image.data);
+    free_image(&puffin_test);
+    free_image(&puffin_resized);
+    std::cout << "[INFO] freed image memory" << std::endl;
 }
