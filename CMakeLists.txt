@@ -27,9 +27,13 @@ add_library(obs-ascii-filter MODULE
     # ascii-view/src/image.c
     # ascii-view/src/print_image.c
 )
+
+# set(OBS_INCLUDE_DIR "C:/Code/GithubRepos/OBS-ASCII-Filter/obs-sources/obs/libobs")
+
 target_include_directories(obs-ascii-filter PRIVATE
     ascii-view/include
-    ${OBS_INCLUDE_DIR}
+    ${OBS_INCLUDE_DIR}                  # libobs headers
+    "C:/Code/GithubRepos/obs-studio/build_x64/config"  # where obsconfig.h was generated
 )
 
 if (DEFINED LIBOBS_LIBRARY)
@@ -41,3 +45,9 @@ set_target_properties(obs-ascii-filter PROPERTIES
 )
 
 target_compile_definitions(obs-ascii-filter PRIVATE M_PI=3.14159265358979323846)
+
+add_custom_command(TARGET obs-ascii-filter POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+    $<TARGET_FILE:obs-ascii-filter>
+    "C:/Program Files/obs-studio/obs-plugins/64bit/"
+)
