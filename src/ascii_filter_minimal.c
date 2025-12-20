@@ -63,6 +63,8 @@ struct ascii_filter_data {
     obs_source_t *source;
     bool invert;
     bool ascii;
+    int ascii_width;
+    int ascii_height;
 };
 
 static void *ascii_filter_create(obs_data_t *settings, obs_source_t *source)
@@ -96,6 +98,9 @@ static obs_properties_t *ascii_filter_properties(void *data)
         "ASCII Filter"
     );
 
+    obs_properties_add_int_slider(props, "ascii_width", "ASCII Width", 16, 256, 1);
+    obs_properties_add_int_slider(props, "ascii_height", "ASCII Height", 16, 128, 1);
+
     return props;
 }
 
@@ -104,8 +109,9 @@ static void ascii_filter_update(void *data, obs_data_t *settings)
     struct ascii_filter_data *filter = data;
     filter->invert = obs_data_get_bool(settings, "invert");
     filter->ascii = obs_data_get_bool(settings, "ascii");
+    filter->ascii_width  = (size_t)obs_data_get_int(settings, "ascii_width");
+    filter->ascii_height = (size_t)obs_data_get_int(settings, "ascii_height");
 }
-
 
 /**
  * Filter callback for raw video frames.
@@ -130,6 +136,8 @@ static struct obs_source_frame *ascii_filter_video(void *data, struct obs_source
     struct ascii_filter_data *filter = (struct ascii_filter_data *)data;
     bool invert = filter->invert;
     bool ascii = filter->ascii;
+    const size_t ascii_width  = filter->ascii_width;
+    const size_t ascii_height = filter->ascii_height;
 switch (frame->format) {
     case VIDEO_FORMAT_RGBA:
         blog(LOG_INFO, "[ASCII FILTER] RGBA Source!");
@@ -170,52 +178,39 @@ switch (frame->format) {
         uint32_t height_yuy2 = frame->height;
         uint32_t stride_yuy2 = frame->linesize[0];
         if (ascii){
-            bool checkerboard = false;
-            // simple checkerboard pattern
-            if (checkerboard) {
-                for (uint32_t y = 0; y < height_yuy2; y++) {
-                    uint8_t *row = buffer_yuy2 + y * stride_yuy2;
-                    for (uint32_t x = 0; x < width_yuy2*2; x += 2) { // YUY2 2 bytes per pixel
-                        bool block = ((x / (width_yuy2/8)) % 2) ^ ((y / (height_yuy2/8)) % 2);
-                        row[x]   = block ? 0 : 255; // Y
-                        row[x+2] = block ? 0 : 255; // Y next pixel
-                    }
-                }
-            } else {
-            // ASCII output size
-            const size_t ascii_width = 64;
-            const size_t ascii_height = 48;
-            // Temp RGB buffer for ASCII conversion
-            size_t channels = 3;
+
+            // const size_t ascii_width = 64;
+            // const size_t ascii_height = 48;
+            const size_t channels = 3;
+
+            // Temporary RGB buffer for ASCII conversion
             double *rgb_data = calloc(ascii_width * ascii_height * channels, sizeof(double));
-            if (!rgb_data){
+            if (!rgb_data) {
                 blog(LOG_ERROR, "[ASCII FILTER] Failed to allocate RGB buffer");
                 break;
             }
 
-
-                // Downsample YUY2 to ASCII grid
+            // Downsample YUY2 to ASCII grid
             for (size_t j = 0; j < ascii_height; j++) {
                 size_t y_start = (j * height_yuy2) / ascii_height;
                 size_t y_end   = ((j + 1) * height_yuy2) / ascii_height;
 
                 for (size_t i = 0; i < ascii_width; i++) {
-                    size_t x_start = (i * width_yuy2) / ascii_width;
-                    size_t x_end   = ((i + 1) * width_yuy2) / ascii_width;
+                    size_t x_start = (i * width_yuy2*2) / ascii_width & ~1;
+                    size_t x_end   = ((i + 1) * width_yuy2*2) / ascii_width & ~1;
 
                     double avg_r = 0.0, avg_g = 0.0, avg_b = 0.0;
                     size_t count = 0;
 
                     for (size_t y = y_start; y < y_end; y++) {
                         uint8_t *row = buffer_yuy2 + y * stride_yuy2;
-
                         for (size_t x = x_start; x < x_end; x += 2) {
                             uint8_t Y0 = row[x];       // pixel 0 luma
                             uint8_t U  = row[x+1];     // chroma U
                             uint8_t Y1 = row[x+2];     // pixel 1 luma
                             uint8_t V  = row[x+3];     // chroma V
 
-                            // Convert first pixel
+                            // Convert first pixel to RGB
                             double r0 = Y0 + 1.402 * (V - 128);
                             double g0 = Y0 - 0.344136 * (U - 128) - 0.714136 * (V - 128);
                             double b0 = Y0 + 1.772 * (U - 128);
@@ -227,7 +222,7 @@ switch (frame->format) {
 
                             avg_r += r0; avg_g += g0; avg_b += b0; count++;
 
-                            // Convert second pixel
+                            // Convert second pixel to RGB
                             double r1 = Y1 + 1.402 * (V - 128);
                             double g1 = Y1 - 0.344136 * (U - 128) - 0.714136 * (V - 128);
                             double b1 = Y1 + 1.772 * (U - 128);
@@ -245,24 +240,46 @@ switch (frame->format) {
                     avg_g /= count;
                     avg_b /= count;
 
-                    // Map to ASCII character (simple grayscale)
-                    double gray = (0.2126*avg_r + 0.7152*avg_g + 0.0722*avg_b) / 255.0;
-                    const char *VALUE_CHARS = " .-=+*x#$&X@";
-                    size_t N_VALUES = strlen(VALUE_CHARS);
-                    char ascii_char = VALUE_CHARS[(size_t)(gray * (N_VALUES-1))];
-
-                    // Write ASCII as RGB block in output buffer
-                    size_t idx = (i + j*ascii_width) * channels;
-                    rgb_data[idx+0] = avg_r / 255.0;
-                    rgb_data[idx+1] = avg_g / 255.0;
-                    rgb_data[idx+2] = avg_b / 255.0;
+                    // Store RGB in temporary buffer
+                    size_t idx = (i + j * ascii_width) * channels;
+                    rgb_data[idx+0] = avg_r;
+                    rgb_data[idx+1] = avg_g;
+                    rgb_data[idx+2] = avg_b;
                 }
             }
 
-            // TODO: Map rgb_data back into frame->data or a new OBS frame
-            // For now we just free
+            // Map RGB blocks back into YUY2 frame
+            for (size_t j = 0; j < ascii_height; j++) {
+                size_t y_start = (j * height_yuy2) / ascii_height;
+                size_t y_end   = ((j + 1) * height_yuy2) / ascii_height;
+
+                for (size_t i = 0; i < ascii_width; i++) {
+                    size_t x_start = (i * width_yuy2*2) / ascii_width & ~1;
+                    size_t x_end   = ((i + 1) * width_yuy2*2) / ascii_width & ~1;
+
+                    size_t idx = (i + j * ascii_width) * channels;
+                    double r = rgb_data[idx+0];
+                    double g = rgb_data[idx+1];
+                    double b = rgb_data[idx+2];
+
+                    for (size_t y = y_start; y < y_end; y++) {
+                        uint8_t *row = buffer_yuy2 + y * stride_yuy2;
+                        for (size_t x = x_start; x < x_end; x += 2) {
+                            // RGB -> YUV conversion
+                            uint8_t Y0 = 0.2126*r + 0.7152*g + 0.0722*b;
+                            uint8_t U  = 128 + -0.09991*r - 0.33609*g + 0.436*b;
+                            uint8_t V  = 128 + 0.615*r - 0.55861*g - 0.05639*b;
+
+                            row[x]   = Y0;
+                            row[x+1] = U;
+                            row[x+2] = Y0;
+                            row[x+3] = V;
+                        }
+                    }
+                }
+            }
+
             free(rgb_data);
-            }  
         }
         if (invert){
             
