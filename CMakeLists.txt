@@ -26,6 +26,7 @@ add_library(obs-ascii-filter MODULE
     src/ascii_filter_minimal.c
     # ascii-view/src/image.c
     # ascii-view/src/print_image.c
+    src/glyphs.c
 )
 
 # set(OBS_INCLUDE_DIR "C:/Code/GithubRepos/OBS-ASCII-Filter/obs-sources/obs/libobs")
@@ -57,5 +58,5 @@ add_custom_command(TARGET obs-ascii-filter POST_BUILD
 # build with:
 # cmake --build build --config Debug --target obs-ascii-filter
 # if that files, be sure to set directories with
-# make -S . -B build   -DOBS_INCLUDE_DIR="C:/Code/GithubRepos/obs-studio/libobs;C:/Code/GithubRepos/obs-studio/build_x64/config"   -DLIBOBS_LIBRARY="C:/Code/GithubRepos/obs-studio/build_x64/libobs/Release/obs.lib"
+# cmake -S . -B build   -DOBS_INCLUDE_DIR="C:/Code/GithubRepos/obs-studio/libobs;C:/Code/GithubRepos/obs-studio/build_x64/config"   -DLIBOBS_LIBRARY="C:/Code/GithubRepos/obs-studio/build_x64/libobs/Release/obs.lib"
 # and make sure OBS is closed and you're running Powershell/VSCode in admin

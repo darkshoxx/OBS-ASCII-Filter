@@ -1,4 +1,5 @@
 #include <obs-module.h>
+#include "glyphs.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-ascii-filter", "en-US")
@@ -173,115 +174,71 @@ switch (frame->format) {
     case VIDEO_FORMAT_YUY2:
         blog(LOG_INFO, "[ASCII FILTER] YUY2 Source!");
         // notescam
+
+        const glyph_t *g = get_glyph('@');
+        if (g) {
+            blog(LOG_INFO, "Glyph '@' loaded successfully");
+        }
+
         uint8_t *buffer_yuy2 = frame->data[0];
         uint32_t width_yuy2 = frame->width;
         uint32_t height_yuy2 = frame->height;
         uint32_t stride_yuy2 = frame->linesize[0];
-        if (ascii){
+        if (ascii) {
+            const uint32_t ascii_width  = 64;
+            const uint32_t ascii_height = 48;
 
-            // const size_t ascii_width = 64;
-            // const size_t ascii_height = 48;
-            const size_t channels = 3;
+            uint32_t block_w = width_yuy2  / ascii_width;
+            uint32_t block_h = height_yuy2 / ascii_height;
 
-            // Temporary RGB buffer for ASCII conversion
-            double *rgb_data = calloc(ascii_width * ascii_height * channels, sizeof(double));
-            if (!rgb_data) {
-                blog(LOG_ERROR, "[ASCII FILTER] Failed to allocate RGB buffer");
-                break;
-            }
+            for (uint32_t j = 0; j < ascii_height; j++) {
+                for (uint32_t i = 0; i < ascii_width; i++) {
 
-            // Downsample YUY2 to ASCII grid
-            for (size_t j = 0; j < ascii_height; j++) {
-                size_t y_start = (j * height_yuy2) / ascii_height;
-                size_t y_end   = ((j + 1) * height_yuy2) / ascii_height;
+                    uint64_t luma_sum = 0;
+                    uint32_t count = 0;
 
-                for (size_t i = 0; i < ascii_width; i++) {
-                    size_t x_start = (i * width_yuy2*2) / ascii_width & ~1;
-                    size_t x_end   = ((i + 1) * width_yuy2*2) / ascii_width & ~1;
+                    uint32_t y_start = j * block_h;
+                    uint32_t y_end   = (j + 1) * block_h;
+                    uint32_t x_start = i * block_w;
+                    uint32_t x_end   = (i + 1) * block_w;
 
-                    double avg_r = 0.0, avg_g = 0.0, avg_b = 0.0;
-                    size_t count = 0;
-
-                    for (size_t y = y_start; y < y_end; y++) {
+                    for (uint32_t y = y_start; y < y_end; y++) {
                         uint8_t *row = buffer_yuy2 + y * stride_yuy2;
-                        for (size_t x = x_start; x < x_end; x += 2) {
-                            uint8_t Y0 = row[x];       // pixel 0 luma
-                            uint8_t U  = row[x+1];     // chroma U
-                            uint8_t Y1 = row[x+2];     // pixel 1 luma
-                            uint8_t V  = row[x+3];     // chroma V
 
-                            // Convert first pixel to RGB
-                            double r0 = Y0 + 1.402 * (V - 128);
-                            double g0 = Y0 - 0.344136 * (U - 128) - 0.714136 * (V - 128);
-                            double b0 = Y0 + 1.772 * (U - 128);
-
-                            // Clamp
-                            if (r0 < 0) r0 = 0; if (r0 > 255) r0 = 255;
-                            if (g0 < 0) g0 = 0; if (g0 > 255) g0 = 255;
-                            if (b0 < 0) b0 = 0; if (b0 > 255) b0 = 255;
-
-                            avg_r += r0; avg_g += g0; avg_b += b0; count++;
-
-                            // Convert second pixel to RGB
-                            double r1 = Y1 + 1.402 * (V - 128);
-                            double g1 = Y1 - 0.344136 * (U - 128) - 0.714136 * (V - 128);
-                            double b1 = Y1 + 1.772 * (U - 128);
-
-                            if (r1 < 0) r1 = 0; if (r1 > 255) r1 = 255;
-                            if (g1 < 0) g1 = 0; if (g1 > 255) g1 = 255;
-                            if (b1 < 0) b1 = 0; if (b1 > 255) b1 = 255;
-
-                            avg_r += r1; avg_g += g1; avg_b += b1; count++;
+                        for (uint32_t x = x_start; x < x_end; x++) {
+                            uint32_t byte_x = x * 2;  // YUY2: 2 bytes per pixel
+                            luma_sum += row[byte_x];
+                            count++;
                         }
                     }
 
-                    // Average color in block
-                    avg_r /= count;
-                    avg_g /= count;
-                    avg_b /= count;
+                    uint8_t avg_y = (uint8_t)(luma_sum / count);
+                    const char *VALUE_CHARS = " .-=+*x#$&X@";
+                    size_t n = strlen(VALUE_CHARS);
 
-                    // Store RGB in temporary buffer
-                    size_t idx = (i + j * ascii_width) * channels;
-                    rgb_data[idx+0] = avg_r;
-                    rgb_data[idx+1] = avg_g;
-                    rgb_data[idx+2] = avg_b;
-                }
-            }
+                    // Map brightness → ASCII index
+                    size_t idx = (avg_y * (n - 1)) / 255;
 
-            // Map RGB blocks back into YUY2 frame
-            for (size_t j = 0; j < ascii_height; j++) {
-                size_t y_start = (j * height_yuy2) / ascii_height;
-                size_t y_end   = ((j + 1) * height_yuy2) / ascii_height;
+                    // Map ASCII index → brightness bucket
+                    uint8_t ascii_y = (uint8_t)((idx * 255) / (n - 1));
 
-                for (size_t i = 0; i < ascii_width; i++) {
-                    size_t x_start = (i * width_yuy2*2) / ascii_width & ~1;
-                    size_t x_end   = ((i + 1) * width_yuy2*2) / ascii_width & ~1;
-
-                    size_t idx = (i + j * ascii_width) * channels;
-                    double r = rgb_data[idx+0];
-                    double g = rgb_data[idx+1];
-                    double b = rgb_data[idx+2];
-
-                    for (size_t y = y_start; y < y_end; y++) {
+                    // Fill the block with avg luma
+                    for (uint32_t y = y_start; y < y_end; y++) {
                         uint8_t *row = buffer_yuy2 + y * stride_yuy2;
-                        for (size_t x = x_start; x < x_end; x += 2) {
-                            // RGB -> YUV conversion
-                            uint8_t Y0 = 0.2126*r + 0.7152*g + 0.0722*b;
-                            uint8_t U  = 128 + -0.09991*r - 0.33609*g + 0.436*b;
-                            uint8_t V  = 128 + 0.615*r - 0.55861*g - 0.05639*b;
 
-                            row[x]   = Y0;
-                            row[x+1] = U;
-                            row[x+2] = Y0;
-                            row[x+3] = V;
+                        for (uint32_t x = x_start; x < x_end; x++) {
+                            uint32_t byte_x = x * 2;
+                            row[byte_x] = ascii_y;
+                            if ((byte_x & 2) == 0) {
+                                row[byte_x + 1] = 128; // U
+                                row[byte_x + 3] = 128; // V
+                            }
                         }
                     }
                 }
             }
-
-            free(rgb_data);
         }
-        if (invert){
+if (invert){
             
             for (uint32_t y = 0; y < height_yuy2; y++){
                 uint8_t *row = buffer_yuy2 + y * stride_yuy2;
