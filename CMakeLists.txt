@@ -52,11 +52,17 @@ add_custom_command(TARGET obs-ascii-filter POST_BUILD
     $<TARGET_FILE:obs-ascii-filter>
     "C:/Program Files/obs-studio/obs-plugins/64bit/"
 )
+find_package(Freetype REQUIRED)
+target_link_libraries(obs-ascii-filter PRIVATE Freetype::Freetype)
 
 
 
 # build with:
 # cmake --build build --config Debug --target obs-ascii-filter
 # if that files, be sure to set directories with
-# cmake -S . -B build   -DOBS_INCLUDE_DIR="C:/Code/GithubRepos/obs-studio/libobs;C:/Code/GithubRepos/obs-studio/build_x64/config"   -DLIBOBS_LIBRARY="C:/Code/GithubRepos/obs-studio/build_x64/libobs/Release/obs.lib"
+# cmake -S . -B build `
+#  -DCMAKE_TOOLCHAIN_FILE="C:/Code/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+#  -DVCPKG_TARGET_TRIPLET=x64-windows `
+#  -DOBS_INCLUDE_DIR="C:/Code/GithubRepos/obs-studio/libobs;C:/Code/GithubRepos/obs-studio/build_x64/config" `
+#  -DLIBOBS_LIBRARY="C:/Code/GithubRepos/obs-studio/build_x64/libobs/Release/obs.lib"
 # and make sure OBS is closed and you're running Powershell/VSCode in admin

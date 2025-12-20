@@ -1,5 +1,6 @@
 #include <obs-module.h>
 #include "glyphs.h"
+#include "font_loader.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-ascii-filter", "en-US")
@@ -175,70 +176,81 @@ switch (frame->format) {
         blog(LOG_INFO, "[ASCII FILTER] YUY2 Source!");
         // notescam
 
-        const glyph_t *g = get_glyph('@');
-        if (g) {
-            blog(LOG_INFO, "Glyph '@' loaded successfully");
-        }
-
         uint8_t *buffer_yuy2 = frame->data[0];
         uint32_t width_yuy2 = frame->width;
         uint32_t height_yuy2 = frame->height;
         uint32_t stride_yuy2 = frame->linesize[0];
         if (ascii) {
-            const uint32_t ascii_width  = 64;
-            const uint32_t ascii_height = 48;
+            // ASCII character set
+            const char *VALUE_CHARS = " .-=+*x#$&X@";
+            const size_t N_VALUES = strlen(VALUE_CHARS);
 
-            uint32_t block_w = width_yuy2  / ascii_width;
-            uint32_t block_h = height_yuy2 / ascii_height;
+            const int ascii_width = 64;   // could later be made configurable via OBS slider
+            const int ascii_height = 48;
+            const int scale_x = frame->width / ascii_width;
+            const int scale_y = frame->height / ascii_height;
+            const int glyph_scale = 8; // how many video pixels per glyph pixel
 
-            for (uint32_t j = 0; j < ascii_height; j++) {
-                for (uint32_t i = 0; i < ascii_width; i++) {
+            uint8_t *buffer = frame->data[0];
+            uint32_t stride = frame->linesize[0];
+            uint32_t width  = frame->width;
+            uint32_t height = frame->height;
 
-                    uint64_t luma_sum = 0;
-                    uint32_t count = 0;
+            for (int j = 0; j < ascii_height; j++) {
+                for (int i = 0; i < ascii_width; i++) {
 
-                    uint32_t y_start = j * block_h;
-                    uint32_t y_end   = (j + 1) * block_h;
-                    uint32_t x_start = i * block_w;
-                    uint32_t x_end   = (i + 1) * block_w;
+                    // Compute average Y in this ASCII cell
+                    double avg_y = 0.0;
+                    int count = 0;
 
-                    for (uint32_t y = y_start; y < y_end; y++) {
-                        uint8_t *row = buffer_yuy2 + y * stride_yuy2;
-
-                        for (uint32_t x = x_start; x < x_end; x++) {
-                            uint32_t byte_x = x * 2;  // YUY2: 2 bytes per pixel
-                            luma_sum += row[byte_x];
+                    for (int y = j*scale_y; y < (j+1)*scale_y && y < height; y++) {
+                        uint8_t *row = buffer + y * stride;
+                        for (int x = i*scale_x; x < (i+1)*scale_x && x < width; x++) {
+                            avg_y += row[x*2]; // YUY2: Y at even byte indices
                             count++;
                         }
                     }
 
-                    uint8_t avg_y = (uint8_t)(luma_sum / count);
-                    const char *VALUE_CHARS = " .-=+*x#$&X@";
-                    size_t n = strlen(VALUE_CHARS);
+                    if (count > 0) avg_y /= count;
 
-                    // Map brightness → ASCII index
-                    size_t idx = (avg_y * (n - 1)) / 255;
+                    // Map to ASCII index
+                    size_t idx = (size_t)(avg_y / 255.0 * (N_VALUES - 1));
+                    char ascii_char = VALUE_CHARS[idx];
 
-                    // Map ASCII index → brightness bucket
-                    uint8_t ascii_y = (uint8_t)((idx * 255) / (n - 1));
+                    // Load glyph for character (from FreeType or hardcoded glyphs)
+                    const glyph_t *g = get_glyph(ascii_char);
+                    if (!g) continue;
 
-                    // Fill the block with avg luma
-                    for (uint32_t y = y_start; y < y_end; y++) {
-                        uint8_t *row = buffer_yuy2 + y * stride_yuy2;
+                    // Render glyph into frame
+                    for (int gy = 0; gy < GLYPH_H; gy++) {
+                        for (int gx = 0; gx < GLYPH_W; gx++) {
 
-                        for (uint32_t x = x_start; x < x_end; x++) {
-                            uint32_t byte_x = x * 2;
-                            row[byte_x] = ascii_y;
-                            if ((byte_x & 2) == 0) {
-                                row[byte_x + 1] = 128; // U
-                                row[byte_x + 3] = 128; // V
+                            uint8_t row_byte = g->rows[gy];
+                            bool on = (row_byte & (1 << (7 - gx))) != 0;
+
+                            uint8_t Y = on ? 235 : 16; // standard YUV luma levels
+
+                            for (int sy = 0; sy < glyph_scale; sy++) {
+                                int y = j*scale_y + gy*glyph_scale + sy;
+                                if (y >= height) continue;
+
+                                uint8_t *row = buffer + y * stride;
+
+                                for (int sx = 0; sx < glyph_scale; sx++) {
+                                    int x = i*scale_x + gx*glyph_scale + sx;
+                                    if (x >= width) continue;
+
+                                    row[x*2] = Y;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-if (invert){
+
+
+        if (invert){
             
             for (uint32_t y = 0; y < height_yuy2; y++){
                 uint8_t *row = buffer_yuy2 + y * stride_yuy2;
