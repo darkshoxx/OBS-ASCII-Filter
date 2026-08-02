@@ -134,3 +134,11 @@ source_info.update = function(data, settings)
     data.amplitude = obs.obs_data_get_double(settings, "amplitude")
     data.number_of_color_levels = obs.obs_data_get_int(settings, "number_of_color_levels")
 end
+
+-- -- unload the script
+-- function script_unload()
+--     if source_info then
+--         source_info.destroy()
+--         source_info = nil
+--     end
+-- end
