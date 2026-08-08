@@ -37,7 +37,11 @@ source_info.create = function(settings, source)
     " size: " .. data.atlas.cx .. "x" .. data.atlas.cy)
 
 
-    -- Compiles the effect
+    -- OBS runs all GPU-bound operations on a single rendering thread.
+    -- enter_graphics and leave_graphics handles a mutex to that thread blocking 
+    -- it, as the lua script runs on a separate thread.
+    -- It locks the graphics render thread so you can splice in new data, 
+    -- such as the ASCII atlas.
     obs.obs_enter_graphics()
     local effect_file_path = script_path() .. 'filter_b.effect.hlsl'
     obs.gs_image_file_init_texture(data.atlas)
@@ -87,12 +91,14 @@ source_info.get_height = function(data)
     return data.height
 end
 
--- Called when rendering the source with the graphics subsystem
+-- Called when rendering the source with the graphics subsystem. it runs once 
+-- every frame, so usually 60 times per second.
 source_info.video_render = function(data)
     if data.effect == nil then
         obs.obs_source_skip_video_filter(data.source)
         return
     end
+    -- we need the width and height from the source the filter is attached to.
     local parent = obs.obs_filter_get_parent(data.source)
     data.width = obs.obs_source_get_base_width(parent)
     data.height = obs.obs_source_get_base_height(parent)
