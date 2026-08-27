@@ -59,7 +59,7 @@ source_info.create = function(settings, source)
     
     if data.effect == nil then
         data.error_message = "Effect failed to compile — check OBS log for details."
-        obs.blog(obs.LOG_ERROR, "Effect compliation failed for " .. " (" .. effect_file_path .. ")")
+        obs.blog(obs.LOG_ERROR, "Effect compilation failed for " .. " (" .. effect_file_path .. ")")
         -- source_info.destroy(data)
         -- return nil
     else
@@ -69,6 +69,8 @@ source_info.create = function(settings, source)
         data.params.height = obs.gs_effect_get_param_by_name(data.effect, "height")
         data.params.cells_h = obs.gs_effect_get_param_by_name(data.effect, "cells_h")
         data.params.cells_v = obs.gs_effect_get_param_by_name(data.effect, "cells_v")
+        data.params.tol_x = obs.gs_effect_get_param_by_name(data.effect, "tol_x")
+        data.params.tol_y = obs.gs_effect_get_param_by_name(data.effect, "tol_y")
         data.params.num_chars = obs.gs_effect_get_param_by_name(data.effect, "num_chars")
         data.params.num_chars_edges = obs.gs_effect_get_param_by_name(data.effect, "num_chars_edges")
         data.params.atlas_tex = obs.gs_effect_get_param_by_name(data.effect, "atlas_tex")
@@ -84,12 +86,18 @@ end
 
 -- Destroys and releases resources linked to the custom data
 -- source_info.destroy = function(data)
+--     obs.obs_enter_graphics()
 --     if data.effect ~= nil then
---         obs.obs_enter_graphics()
 --         obs.gs_effect_destroy(data.effect)
 --         data.effect = nil
---         obs.obs_leave_graphics()
 --     end
+--     if data.atlas ~= nil then
+--         obs.gs_image_file_free(data.atlas)
+--     end
+--     if data.atlas_edges ~= nil then
+--         obs.gs_image_file_free(data.atlas_edges)
+--     end
+--     obs.obs_leave_graphics()
 -- end
 
 -- Returns the width of the source
@@ -122,6 +130,8 @@ source_info.video_render = function(data)
     obs.gs_effect_set_int(data.params.height, data.height)
     obs.gs_effect_set_int(data.params.cells_h, data.cells_h)
     obs.gs_effect_set_int(data.params.cells_v, data.cells_v)
+    obs.gs_effect_set_float(data.params.tol_x, data.tol_x)
+    obs.gs_effect_set_float(data.params.tol_y, data.tol_y)
     obs.gs_effect_set_int(data.params.num_chars, data.num_chars)
     obs.gs_effect_set_int(data.params.num_chars_edges, data.num_chars_edges)
     obs.gs_effect_set_texture(data.params.atlas_tex, data.atlas.texture)
@@ -136,12 +146,16 @@ end
 source_info.get_defaults = function(settings)
     obs.obs_data_set_default_int(settings, "cells_h", 16)
     obs.obs_data_set_default_int(settings, "cells_v", 9)
+    obs.obs_data_set_default_double(settings, "tol_x", 0.5)
+    obs.obs_data_set_default_double(settings, "tol_y", 0.5)
 end
 
 source_info.get_properties = function(data)
     local props = obs.obs_properties_create()
     obs.obs_properties_add_int_slider(props, "cells_h", "Number of cells per row", 1, 160, 1)
     obs.obs_properties_add_int_slider(props, "cells_v", "Number of cells per column", 1, 90, 1)
+    obs.obs_properties_add_float_slider(props, "tol_x", "Edge Tolerance X", 0.0, 2.0, 0.01)
+    obs.obs_properties_add_float_slider(props, "tol_y", "Edge Tolerance Y", 0.0, 2.0, 0.01)
     return props
 end
 
@@ -150,4 +164,6 @@ end
 source_info.update = function(data, settings)
     data.cells_h = obs.obs_data_get_int(settings, "cells_h")
     data.cells_v = obs.obs_data_get_int(settings, "cells_v")
+    data.tol_x = obs.obs_data_get_double(settings, "tol_x")
+    data.tol_y = obs.obs_data_get_double(settings, "tol_y")
 end
