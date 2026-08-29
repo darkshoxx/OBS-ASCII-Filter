@@ -6,7 +6,7 @@
 // General Properties
 uniform int cells_h = 16;
 uniform int cells_v = 9;
-uniform int num_colours = 4
+uniform int num_colours = 4;
 uniform float4 white = {1.0, 1.0, 1.0, 1.0};
 uniform float4 black = {0.0, 0.0, 0.0, 1.0};
 
@@ -80,58 +80,66 @@ float3 hsv_to_rgb(float3 hsv_pack){
     // All three are between 0 and 1
     float chroma = hsv_pack.y * hsv_pack.z;
     float h_six = hsv_pack.x * 6;
-    float intermediate = C*(1-abs(mod(h_six, 2)-1));
-    float3 rgb_1 = {0,0,0}
-    if (0< h_six <= 1){
+    float intermediate = chroma*(1-abs(fmod(h_six, 2)-1));
+    float3 rgb_1 = {0,0,0};
+    if (0 < h_six && h_six <= 1){
         rgb_1.x = chroma;
         rgb_1.y = intermediate;
     }
-    if (1< h_six <= 2){
+    if (1 < h_six && h_six <= 2){
         rgb_1.x = intermediate;
         rgb_1.y = chroma;
     }
-    if (2< h_six <= 3){
+    if (2 < h_six && h_six <= 3){
         rgb_1.y = chroma;
         rgb_1.z = intermediate;
     }
-    if (3< h_six <= 4){
+    if (3 < h_six && h_six <= 4){
         rgb_1.y = intermediate;
         rgb_1.z = chroma;
     }
-    if (4< h_six <= 5){
+    if (4 < h_six && h_six <= 5){
         rgb_1.x = intermediate;
         rgb_1.z = chroma;
     }
-    if (5< h_six <= 6){
+    if (5 < h_six && h_six <= 6){
         rgb_1.x = chroma;
         rgb_1.z = intermediate;
     }
     float match = hsv_pack.z - chroma;
-    return {rgb_1.x + match, rgb_1.y + match,rgb_1.z + match}
+    return float3(rgb_1.x + match, rgb_1.y + match,rgb_1.z + match);
 }
 
 float3 rgb_to_hsv(float3 rgb_pack){
-    float v = max(rgb_pack);
-    float x_min = min(rgb_pack);
+    float v = max(rgb_pack.r, max(rgb_pack.g, rgb_pack.b));
+    float x_min = min(rgb_pack.r, min(rgb_pack.g, rgb_pack.b));
     float chroma = v - x_min;
+    float h = 0.0;
+    float sat = 0.0;
     // float light = v - (chroma / 2);
     if (chroma==0) { // is this the usual floats can't be equal to each other bug?
-        float h = 0;
+        h = 0;
     }
-    if (v==rgb_pack.x){
-        float h = mod((rgb_pack.y - rgb_pack.z) / chroma, 6) / 6;
+    else if (v==rgb_pack.x){
+        float helper = fmod((rgb_pack.y - rgb_pack.z) / chroma, 6);
+        if (helper < 0){
+            h = (helper + 6) / 6;
+        } else {
+            h = helper / 6 ;
+        }
     }
-    if (v==rgb_pack.y){
-        float h = (((rgb_pack.z - rgb_pack.x) / chroma) + 2, 6) / 6;
+    else if (v==rgb_pack.y){
+        h = (((rgb_pack.z - rgb_pack.x) / chroma) + 2) / 6;
     }
-    if (v==rgb_pack.z){
-        float h = (((rgb_pack.x - rgb_pack.y) / chroma) + 4, 6) / 6;
+    else if (v==rgb_pack.z){
+        h = (((rgb_pack.x - rgb_pack.y) / chroma) + 4) / 6;
     }
     if (v==0){
-        float sat = 0;
+        sat = 0.0;
     } else {
-        float sat = chroma / v;
+        sat = chroma / v;
     }
+    return float3(h, sat, v);
 }
 
 
