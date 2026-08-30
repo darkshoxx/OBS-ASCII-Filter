@@ -19,7 +19,7 @@ uniform float tol_y = 0.5;
 uniform float tol_sat = 0.1;
 uniform bool dyn_sat = true;
 uniform bool dyn_val = true;
-
+uniform float mip_bias = 0.75;
 
 // Size of the source picture
 uniform int width;
@@ -197,14 +197,24 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
 
     // For each pixel in the cell we only sample the center. That ensures that
     // every part of the cell displays it's position in the same ASCII character.
+    float mip_level = log2(max((float)width / cells_h, (float)height / cells_v)) + mip_bias;
+    float2 step = float2(1.0 / cells_h, 1.0 / cells_v);
     float4 src = image.Sample(linear_clamp, cell_center);
+    src += image.Sample(linear_clamp, cell_center + float2(-step.x, -step.y));
+    src += image.Sample(linear_clamp, cell_center + float2(0.0,     -step.y));
+    src += image.Sample(linear_clamp, cell_center + float2(step.x,  -step.y));
+    src += image.Sample(linear_clamp, cell_center + float2(-step.x, 0.0));
+    src += image.Sample(linear_clamp, cell_center + float2(step.x,  0.0));
+    src += image.Sample(linear_clamp, cell_center + float2(-step.x, step.y));
+    src += image.Sample(linear_clamp, cell_center + float2(0.0,     step.y));
+    src += image.Sample(linear_clamp, cell_center + float2(step.x,  step.y));
+    src /= 9.0;
 
     // next gotta sample the neighbourhood of the center. for simplicity, just
     // a 3x3 neigbourhood for a single sobel pass. 
     // 2 options:
     // 1: Sample by cell, using cell-to-cell offsets:
-    float2 step = float2(1.0 / cells_h, 1.0 / cells_v);
-    float mip_level = log2(max((float)width / cells_h, (float)height / cells_v));
+
 
     float3 luma_2 = float3(0.299, 0.587, 0.114);
 
