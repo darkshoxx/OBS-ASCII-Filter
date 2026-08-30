@@ -19,7 +19,6 @@ uniform float tol_y = 0.5;
 uniform float tol_sat = 0.1;
 uniform bool dyn_sat = true;
 uniform bool dyn_val = true;
-uniform float mip_bias = 0.75;
 
 // Size of the source picture
 uniform int width;
@@ -69,6 +68,8 @@ pixel_data vertex_shader_e(vertex_data vertex)
     return pixel;
 }
 
+// Buckets a Sobel gradient angle into one of 4 edge-glyph directions
+// (vertical / horizontal / two diagonals), each covering a 45-degree wedge.
 int sobel_test(float sobel_angle)
 {
    if ((22.5 <= sobel_angle && sobel_angle <= 67.5) || (-157.5 <= sobel_angle && sobel_angle <= -112.5))
@@ -81,6 +82,8 @@ int sobel_test(float sobel_angle)
         return 2; 
 }
 
+// Converts an HSV colour (each component 0-1) to RGB.
+// Standard chroma/intermediate decomposition, six 60-degree hue segments.
 float3 hsv_to_rgb(float3 hsv_pack){
     // All three are between 0 and 1
     float chroma = hsv_pack.y * hsv_pack.z;
@@ -115,14 +118,16 @@ float3 hsv_to_rgb(float3 hsv_pack){
     return float3(rgb_1.x + match, rgb_1.y + match,rgb_1.z + match);
 }
 
+// Converts an RGB colour (each component 0-1) to HSV.
+// Hue is undefined (returns 0) for perfectly grey pixels (chroma == 0).
 float3 rgb_to_hsv(float3 rgb_pack){
     float v = max(rgb_pack.r, max(rgb_pack.g, rgb_pack.b));
     float x_min = min(rgb_pack.r, min(rgb_pack.g, rgb_pack.b));
     float chroma = v - x_min;
     float h = 0.0;
     float sat = 0.0;
-    // float light = v - (chroma / 2);
-    if (chroma==0) { // is this the usual floats can't be equal to each other bug?
+
+    if (chroma==0) { 
         h = 0;
     }
     else if (v==rgb_pack.x){
@@ -147,11 +152,19 @@ float3 rgb_to_hsv(float3 rgb_pack){
     return float3(h, sat, v);
 }
 
+// Snaps a colour's hue to one of n evenly-spaced wedges around the hue wheel,
+// forcing full saturation/value unless dyn_sat/dyn_val disable that.
+// n == 1 is a special case: always returns white, colour disabled.
 float4 quantize_hue(float3 rgb, int n){
     if (n==1){
         return white;
     }
     float3 hsv = rgb_to_hsv(rgb);
+    // This is a fustercluck to read, I know.
+    // There's a bool for setting both value and saturation to the maximum, but
+    // how that is applied depends on whether the original saturation is below
+    // the saturation treshold, and so has to be applied twice, once in the
+    // branch and once outside.
     if (!dyn_val){
     hsv.z = 1.0;
     }
@@ -195,9 +208,8 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
     float2 cell_center = (floor(pixel.uv * float2(cells_h, cells_v)) + 0.5) / float2(cells_h, cells_v);
 
 
-    // For each pixel in the cell we only sample the center. That ensures that
-    // every part of the cell displays it's position in the same ASCII character.
-    float mip_level = log2(max((float)width / cells_h, (float)height / cells_v)) + mip_bias;
+    // Average a 3×3 spread of cell-spaced samples, to reduce single-pixel noise 
+    // at cell boundaries.
     float2 step = float2(1.0 / cells_h, 1.0 / cells_v);
     float4 src = image.Sample(linear_clamp, cell_center);
     src += image.Sample(linear_clamp, cell_center + float2(-step.x, -step.y));
@@ -212,12 +224,10 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
 
     // next gotta sample the neighbourhood of the center. for simplicity, just
     // a 3x3 neigbourhood for a single sobel pass. 
-    // 2 options:
-    // 1: Sample by cell, using cell-to-cell offsets:
-
-
     float3 luma_2 = float3(0.299, 0.587, 0.114);
-
+    // The mips are noop as far as I know. It was a first attempt to reduce
+    // noise, will be removed at some point.
+    float mip_level = log2(max((float)width / cells_h, (float)height / cells_v));
     // Row 0 - Top: y - step.y
     float m00 = dot(image.SampleLevel(linear_clamp, cell_center + float2(-step.x, -step.y), mip_level).rgb, luma_2);
     float m01 = dot(image.SampleLevel(linear_clamp, cell_center + float2(0.0, -step.y), mip_level).rgb, luma_2);
@@ -229,33 +239,10 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
     float m12 = dot(image.SampleLevel(linear_clamp, cell_center + float2(step.x, 0.0), mip_level).rgb, luma_2);
 
     // Row 2 - Bottom: y + step.y
-
     float m20 = dot(image.SampleLevel(linear_clamp, cell_center + float2(-step.x, step.y), mip_level).rgb, luma_2);
     float m21 = dot(image.SampleLevel(linear_clamp, cell_center + float2(0.0, step.y), mip_level).rgb, luma_2);
     float m22 = dot(image.SampleLevel(linear_clamp, cell_center + float2(step.x, step.y), mip_level).rgb, luma_2);
 
-    // 2: Pixel neighbours
-    if (1>0){ //quickest way to comment out
-        float2 step = float2(1.0 / (float)width, 1.0 / (float)height);
-
-        float3 luma_2 = float3(0.299, 0.587, 0.114);
-
-        // Row 0 - Top: y - step.y
-        float m00 = dot(image.Sample(linear_clamp, cell_center + float2(-step.x, -step.y)).rgb, luma_2);
-        float m01 = dot(image.Sample(linear_clamp, cell_center + float2(0.0, -step.y)).rgb, luma_2);
-        float m02 = dot(image.Sample(linear_clamp, cell_center + float2(step.x, -step.y)).rgb, luma_2);
-        
-        // Row 1 - Middle: y 
-        float m10 = dot(image.Sample(linear_clamp, cell_center + float2(-step.x, 0.0)).rgb, luma_2);
-        float m11 = dot(image.Sample(linear_clamp, cell_center).rgb, luma_2);
-        float m12 = dot(image.Sample(linear_clamp, cell_center + float2(step.x, 0.0)).rgb, luma_2);
-
-        // Row 2 - Bottom: y + step.y
-
-        float m20 = dot(image.Sample(linear_clamp, cell_center + float2(-step.x, step.y)).rgb, luma_2);
-        float m21 = dot(image.Sample(linear_clamp, cell_center + float2(0.0, step.y)).rgb, luma_2);
-        float m22 = dot(image.Sample(linear_clamp, cell_center + float2(step.x, step.y)).rgb, luma_2);
-    }
     float3x3 G = float3x3(
         m00, m01, m02,
         m10, m11, m12,
@@ -271,7 +258,7 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
     if (s_mag_sq > (tol_x*tol_y))
     {
         float s_angle = degrees(atan2(sy,sx)); 
-        int edges_index = sobel_test(s_angle); // function needs written. Returns index of atlas for correct angle, 5 for bad angle
+        int edges_index = sobel_test(s_angle); 
 
         float2 atlas_edges_uv = float2((edges_index + cell_uv.x) / num_chars_edges, cell_uv.y);
         float4 glyph_e = atlas_tex_edges.Sample(linear_clamp, atlas_edges_uv);
@@ -285,7 +272,7 @@ float4 pixel_shader_e(pixel_data pixel) : TARGET
     // The 3d vector is a known constant, giving the percieved relative luminance
     // of the colours in RGB space. Note how Green is percieved brighter than the others.
     // luma then becomes the percieved luminance of the cell (center)
-    float luma = dot(src.rgb, float3(0.299, 0.587, 0.114)); // can be replaced with m11 if too slow
+    float luma = dot(src.rgb, luma_2); // can be replaced with m11 if too slow
     // we use the luminance to see how far along the character is we wish to draw
     int char_index = round(luma * (num_chars - 1));
     // We only need the char_index for column-offsets. The row position remains the same.
