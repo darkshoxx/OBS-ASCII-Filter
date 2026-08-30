@@ -2,8 +2,8 @@ obs = obslua
 
 -- Returns description in the Scripts window
 function script_description()
-    return [[<center><h2>Example Filter Phase D</h2></center>
-    <p>This is Phase D of making an ASCII shader filter 
+    return [[<center><h2>Example Filter Phase E</h2></center>
+    <p>This is Phase E of making an ASCII shader filter 
     for OBS, including edge detection.</p>]]
 end
 
@@ -14,11 +14,11 @@ end
 
 -- global varaibale definitions of source info
 source_info = {}
-source_info.id = 'Filter-Phase-D'
+source_info.id = 'Filter-Phase-E'
 source_info.type = obs.OBS_SOURCE_TYPE_FILTER   -- INPUT or FILTER or TRANSITION
 source_info.output_flags = obs.OBS_SOURCE_VIDEO -- Can be VIDEO/AUDIO/ASYNC/etc
 source_info.get_name = function()
-    return "Phase-D"
+    return "Phase-E"
 end
 
 -- Creates the implementation data for the source
@@ -50,7 +50,7 @@ source_info.create = function(settings, source)
     -- It locks the graphics render thread so you can splice in new data, 
     -- such as the ASCII atlas.
     obs.obs_enter_graphics()
-    local effect_file_path = script_path() .. 'filter_d.effect.hlsl'
+    local effect_file_path = script_path() .. 'filter_e.effect.hlsl'
     obs.gs_image_file_init_texture(data.atlas)
     obs.gs_image_file_init_texture(data.atlas_edges)
     data.effect = obs.gs_effect_create_from_file(effect_file_path, nil)
@@ -73,6 +73,8 @@ source_info.create = function(settings, source)
         data.params.tol_x = obs.gs_effect_get_param_by_name(data.effect, "tol_x")
         data.params.tol_y = obs.gs_effect_get_param_by_name(data.effect, "tol_y")
         data.params.tol_sat = obs.gs_effect_get_param_by_name(data.effect, "tol_sat")
+        data.params.dyn_sat = obs.gs_effect_get_param_by_name(data.effect, "dyn_sat")
+        data.params.dyn_val = obs.gs_effect_get_param_by_name(data.effect, "dyn_val")
         data.params.num_chars = obs.gs_effect_get_param_by_name(data.effect, "num_chars")
         data.params.num_chars_edges = obs.gs_effect_get_param_by_name(data.effect, "num_chars_edges")
         data.params.atlas_tex = obs.gs_effect_get_param_by_name(data.effect, "atlas_tex")
@@ -136,6 +138,8 @@ source_info.video_render = function(data)
     obs.gs_effect_set_float(data.params.tol_x, data.tol_x)
     obs.gs_effect_set_float(data.params.tol_y, data.tol_y)
     obs.gs_effect_set_float(data.params.tol_sat, data.tol_sat)
+    obs.gs_effect_set_bool(data.params.dyn_sat, data.dyn_sat)
+    obs.gs_effect_set_bool(data.params.dyn_val, data.dyn_val)
     obs.gs_effect_set_int(data.params.num_chars, data.num_chars)
     obs.gs_effect_set_int(data.params.num_chars_edges, data.num_chars_edges)
     obs.gs_effect_set_texture(data.params.atlas_tex, data.atlas.texture)
@@ -148,12 +152,14 @@ source_info.video_render = function(data)
 end
 
 source_info.get_defaults = function(settings)
-    obs.obs_data_set_default_int(settings, "cells_h", 16)
-    obs.obs_data_set_default_int(settings, "cells_v", 9)
+    obs.obs_data_set_default_int(settings, "cells_h", 160)
+    obs.obs_data_set_default_int(settings, "cells_v", 40)
     obs.obs_data_set_default_int(settings, "num_colours", 4)
     obs.obs_data_set_default_double(settings, "tol_x", 0.5)
     obs.obs_data_set_default_double(settings, "tol_y", 0.5)
     obs.obs_data_set_default_double(settings, "tol_sat", 0.1)
+    obs.obs_data_set_default_bool(settings, "dyn_sat", true)
+    obs.obs_data_set_default_bool(settings, "dyn_val", true)
 end
 
 source_info.get_properties = function(data)
@@ -164,6 +170,8 @@ source_info.get_properties = function(data)
     obs.obs_properties_add_float_slider(props, "tol_x", "Edge Tolerance X", 0.0, 2.0, 0.01)
     obs.obs_properties_add_float_slider(props, "tol_y", "Edge Tolerance Y", 0.0, 2.0, 0.01)
     obs.obs_properties_add_float_slider(props, "tol_sat", "Saturation Tolerance", 0.0, 1.0, 0.05)
+    obs.obs_properties_add_bool(props, "dyn_sat", "Dynamic Saturation")
+    obs.obs_properties_add_bool(props, "dyn_val", "Dynamic Colour Value")
     return props
 end
 
@@ -176,4 +184,6 @@ source_info.update = function(data, settings)
     data.tol_x = obs.obs_data_get_double(settings, "tol_x")
     data.tol_y = obs.obs_data_get_double(settings, "tol_y")
     data.tol_sat = obs.obs_data_get_double(settings, "tol_sat")
+    data.dyn_sat = obs.obs_data_get_bool(settings, "dyn_sat")
+    data.dyn_val = obs.obs_data_get_bool(settings, "dyn_val")
 end
