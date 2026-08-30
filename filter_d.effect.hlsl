@@ -15,6 +15,8 @@ uniform float4 black = {0.0, 0.0, 0.0, 1.0};
 uniform float tol_x = 0.5;
 uniform float tol_y = 0.5;
 
+// Saturation Cutoff
+uniform float tol_sat = 0.1;
 
 // Size of the source picture
 uniform int width;
@@ -143,6 +145,24 @@ float3 rgb_to_hsv(float3 rgb_pack){
 }
 
 
+
+float4 quantize_hue(float3 rgb, int n){
+    if (n==1){
+        return white;
+    }
+    float3 hsv = rgb_to_hsv(rgb);
+    if (hsv.y < tol_sat){
+        return white;
+    }
+    int index = floor(hsv.x*n);
+    hsv.x = (index + 0.5)/n;
+    hsv.y = 1.0;
+    hsv.z = 1.0;
+    return float4(hsv_to_rgb(hsv), 1.0);
+
+}
+
+
 float4 pixel_shader_d(pixel_data pixel) : TARGET
 {
     // Sobel Kernels
@@ -164,6 +184,11 @@ float4 pixel_shader_d(pixel_data pixel) : TARGET
     // Adding a half gives the center of the cell: 1.5. 
     // scaling back down to [0,1] by dividing by grid size: 1.5/16 = 0.09375
     float2 cell_center = (floor(pixel.uv * float2(cells_h, cells_v)) + 0.5) / float2(cells_h, cells_v);
+
+
+    // For each pixel in the cell we only sample the center. That ensures that
+    // every part of the cell displays it's position in the same ASCII character.
+    float4 src = image.Sample(linear_clamp, cell_center);
 
     // next gotta sample the neighbourhood of the center. for simplicity, just
     // a 3x3 neigbourhood for a single sobel pass. 
@@ -231,15 +256,13 @@ float4 pixel_shader_d(pixel_data pixel) : TARGET
 
         float2 atlas_edges_uv = float2((edges_index + cell_uv.x) / num_chars_edges, cell_uv.y);
         float4 glyph_e = atlas_tex_edges.Sample(linear_clamp, atlas_edges_uv);
-        return lerp(black, white, glyph_e.a);
+        return lerp(black, quantize_hue(src.rgb, num_colours), glyph_e.a);
 
     }
     // otherwise continue here.
     
 
-    // For each pixel in the cell we only sample the center. That ensures that
-    // every part of the cell displays it's position in the same ASCII character.
-    float4 src = image.Sample(linear_clamp, cell_center);
+
     // The 3d vector is a known constant, giving the percieved relative luminance
     // of the colours in RGB space. Note how Green is percieved brighter than the others.
     // luma then becomes the percieved luminance of the cell (center)
@@ -250,7 +273,7 @@ float4 pixel_shader_d(pixel_data pixel) : TARGET
     float2 atlas_uv = float2((char_index + cell_uv.x) / num_chars, cell_uv.y);
     // finally, we sample from that position on the atlas.
     float4 glyph = atlas_tex.Sample(linear_clamp, atlas_uv);
-    return lerp(black, white, glyph.a);
+    return lerp(black, quantize_hue(src.rgb, num_colours), glyph.a);
 }
 
 technique Draw
