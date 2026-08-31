@@ -5,14 +5,14 @@ https://github.com/gouwsxander/ascii-view
 and the accompanying video:
 https://www.youtube.com/watch?v=t8aSqlC_Duo
 
-## Ignore the below, that was the old plan, the new plan is HLSL + LUA
-## How to actually make a (CPU-based) filter plugin (as opposed to a shader running on GPU):
-1. Define the filter in a cpp file
-2. Define a bridge to C
-3. Build OBS from scratch according to the build instructions on their github
-4. Build the library files by running `cmake --build build_x64 --config Release --target libobs`
-    This will create obs.lib and obs.dll for some reason in /build_x64/libobs/Release/
-5. Link those library files in the build of your filter as follows:
-`cmake -S . -B build -DOBS_INCLUDE_DIR=Path/To/obs-studio/libobs^;Path/To/obs-studio/build_x64/config -DLIBOBS_LIBRARY=Path/To/obs-studio/build_x64/libobs/Release/obs.lib"`
-assuming you cloned to `Path/To/obs-studio` and compiled to `Path/To/obs-studio/build_x64`
-6. Building with  `cmake --build build --target obs-ascii-filter`, then copying the `obs_ascii-filter.dll` from `/build/Debug` to your `obs-plugins/64bit/` folder.
+
+Originally intended as a C/C++ Project, now shifted to lua and HLSL.
+
+## How to use
+Download the `atlas` folder as well as both `filter_e.lua` and `filter_e.effect.hlsl` and have them in the same folder. Doesn't have to be the `obs-studio\data\obs-plugins\frontend-tools\scripts`
+folder but can make things easier.
+
+Open OBS, go to Tools, Scripts, click "+", and navigate to the `filter_e.lua` script.
+Have a Video source in a scene, and set parameters as required.
+
+A lot of these depend on the lighting and camera settings so I'm giving a little more flexibility with parameters to play around.
