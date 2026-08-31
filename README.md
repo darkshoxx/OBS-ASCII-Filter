@@ -5,8 +5,8 @@ https://github.com/gouwsxander/ascii-view
 and the accompanying video:
 https://www.youtube.com/watch?v=t8aSqlC_Duo
 
-
-# How to actually make a (CPU-based) filter plugin (as opposed to a shader running on GPU):
+## Ignore the below, that was the old plan, the new plan is HLSL + LUA
+## How to actually make a (CPU-based) filter plugin (as opposed to a shader running on GPU):
 1. Define the filter in a cpp file
 2. Define a bridge to C
 3. Build OBS from scratch according to the build instructions on their github
