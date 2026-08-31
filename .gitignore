@@ -1,4 +1,5 @@
-ascii-view/
+/ascii-view
 .vscode/
 build/
+references/async-delay-filter.c
 obs-sources/
